@@ -1,0 +1,9 @@
+[package]
+name = "mbwatch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+imap = { version = "=3.0.0-alpha.14", features = ["rustls-tls"] }
+log = "0.4.21"
+simple_logger = "5.0.0"
