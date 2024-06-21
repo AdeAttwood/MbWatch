@@ -5,12 +5,21 @@ use std::process::Command;
 pub struct ImapStoreConfig {
     pub name: String,
     pub host: String,
+    pub port: Option<u16>,
     pub user: String,
     pub pass: Option<String>,
     pub pass_command: Option<String>,
+    pub cert_file: Option<String>,
 }
 
 impl ImapStoreConfig {
+    pub fn port(&self) -> u16 {
+        if let Some(port) = self.port {
+            return port;
+        }
+
+        993
+    }
     pub fn password(&self) -> String {
         if let Some(pass) = &self.pass {
             return pass.to_string();
@@ -56,9 +65,11 @@ impl Config {
 enum ConfigLine {
     ImapStore(String),
     Host(String),
+    Port(u16),
     User(String),
     Pass(String),
     PassCommand(String),
+    CertFile(String),
 
     Channel(String),
     Near(String),
@@ -76,9 +87,11 @@ impl TryFrom<&str> for ConfigLine {
         match key {
             "IMAPStore" => Ok(ConfigLine::ImapStore(value)),
             "Host" => Ok(ConfigLine::Host(value)),
+            "Port" => Ok(ConfigLine::Port(value.parse().unwrap())),
             "User" => Ok(ConfigLine::User(value)),
             "Pass" => Ok(ConfigLine::Pass(remove_quotes(value))),
             "PassCmd" => Ok(ConfigLine::PassCommand(remove_quotes(value))),
+            "CertificateFile" => Ok(ConfigLine::CertFile(value)),
 
             "Channel" => Ok(ConfigLine::Channel(value)),
             "Near" => Ok(ConfigLine::Near(value)),
@@ -136,6 +149,10 @@ pub fn from_file(config_path: &str) -> Config {
                 let store = config.imap_stores.last_mut().unwrap();
                 store.host = host;
             }
+            ConfigLine::Port(port) => {
+                let store = config.imap_stores.last_mut().unwrap();
+                store.port = Some(port);
+            }
             ConfigLine::User(user) => {
                 let store = config.imap_stores.last_mut().unwrap();
                 store.user = user;
@@ -147,6 +164,10 @@ pub fn from_file(config_path: &str) -> Config {
             ConfigLine::PassCommand(command) => {
                 let store = config.imap_stores.last_mut().unwrap();
                 store.pass_command = Some(command);
+            }
+            ConfigLine::CertFile(cert_file) => {
+                let store = config.imap_stores.last_mut().unwrap();
+                store.cert_file = Some(cert_file);
             }
 
             ConfigLine::Channel(name) => {
