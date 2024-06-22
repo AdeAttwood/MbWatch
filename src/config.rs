@@ -40,17 +40,24 @@ impl ImapStoreConfig {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ChannelConfig {
     pub name: String,
     pub near: String,
     pub far: String,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct GroupConfig {
+    pub name: String,
+    pub channels: Vec<(String, String)>,
+}
+
 #[derive(Debug, Default)]
 pub struct Config {
     pub channels: Vec<ChannelConfig>,
     pub imap_stores: Vec<ImapStoreConfig>,
+    pub groups: Vec<GroupConfig>,
 }
 
 impl Config {
@@ -59,6 +66,20 @@ impl Config {
             .iter()
             .find(|store| format!(":{}:", store.name) == name)
             .map(|store| store.clone())
+    }
+
+    pub fn find_channel(&self, name: &str) -> Option<ChannelConfig> {
+        self.channels
+            .iter()
+            .find(|channel| channel.name == name)
+            .map(|channel| channel.clone())
+    }
+
+    pub fn find_group(&self, name: &str) -> Option<GroupConfig> {
+        self.groups
+            .iter()
+            .find(|group| group.name == name)
+            .map(|group| group.clone())
     }
 }
 
@@ -74,6 +95,9 @@ enum ConfigLine {
     Channel(String),
     Near(String),
     Far(String),
+
+    Group(String),
+    Channels(String),
 
     End,
 }
@@ -96,6 +120,9 @@ impl TryFrom<&str> for ConfigLine {
             "Channel" => Ok(ConfigLine::Channel(value)),
             "Near" => Ok(ConfigLine::Near(value)),
             "Far" => Ok(ConfigLine::Far(value)),
+
+            "Group" => Ok(ConfigLine::Group(value)),
+            "Channels" => Ok(ConfigLine::Channels(value)),
 
             _ => {
                 if value == "" {
@@ -143,7 +170,7 @@ pub fn from_file(config_path: &str) -> Config {
             ConfigLine::ImapStore(name) => {
                 let mut imap_store_config = ImapStoreConfig::default();
                 imap_store_config.name = name;
-                config.imap_stores.push(imap_store_config)
+                config.imap_stores.push(imap_store_config);
             }
             ConfigLine::Host(host) => {
                 let store = config.imap_stores.last_mut().unwrap();
@@ -182,6 +209,27 @@ pub fn from_file(config_path: &str) -> Config {
             ConfigLine::Near(near) => {
                 let channel = config.channels.last_mut().unwrap();
                 channel.near = near;
+            }
+
+            ConfigLine::Group(name) => {
+                let mut group = GroupConfig::default();
+                group.name = name;
+
+                config.groups.push(group);
+            }
+            ConfigLine::Channels(channels) => {
+                let group = config.groups.last_mut().unwrap();
+                group.channels = channels
+                    .split(',')
+                    .map(|channel| {
+                        let mut iter = channel.trim().split(':');
+
+                        (
+                            iter.next().unwrap_or("").to_string(),
+                            iter.next().unwrap_or("").to_string(),
+                        )
+                    })
+                    .collect();
             }
 
             ConfigLine::End => {}

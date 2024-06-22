@@ -6,7 +6,7 @@ use std::thread;
 use config::ImapStoreConfig;
 use imap::{ImapConnection, Session};
 
-fn connect(config: &ImapStoreConfig) -> Option<Session<Box<dyn ImapConnection>>> {
+fn connect(config: &ImapStoreConfig, mailbox: &String) -> Option<Session<Box<dyn ImapConnection>>> {
     let mut client_builder = imap::ClientBuilder::new(config.host.clone(), config.port())
         .mode(imap::ConnectionMode::AutoTls)
         .tls_kind(imap::TlsKind::Rust);
@@ -38,7 +38,7 @@ fn connect(config: &ImapStoreConfig) -> Option<Session<Box<dyn ImapConnection>>>
         return None;
     }
 
-    session.select("INBOX").expect("Unable to select folder");
+    session.select(mailbox).expect("Unable to select folder");
 
     Some(session)
 }
@@ -56,18 +56,32 @@ fn main() {
     };
 
     let config = config::from_file(&format!("{home}/.mbsyncrc"));
+    let mbwatch_group = match config.find_group("mbwatch") {
+        Some(group) => group,
+        None => panic!("Unable to find mbwatch group in your mbsync config"),
+    };
 
     let mut watchers = Vec::new();
 
-    for channel in &config.channels {
+    for (channel_name, mailbox) in &mbwatch_group.channels {
+        let channel = match config.find_channel(channel_name) {
+            Some(channel) => channel,
+            None => panic!("Unable to find channel {}", channel_name),
+        };
+
+        if mailbox.is_empty() {
+            panic!("No mailbox defined for channel {}", channel_name);
+        }
+
         let imap_store = match config.find_imap_store(&channel.far) {
             Some(store) => store,
             None => panic!("Unable to find store {}", &channel.far),
         };
 
         let channel_name = channel.name.clone();
+        let mailbox = mailbox.clone();
         watchers.push(thread::spawn(move || {
-            let mut session = match connect(&imap_store) {
+            let mut session = match connect(&imap_store, &mailbox) {
                 Some(session) => session,
                 None => {
                     log::error!("Unable to connect to channel {}", channel_name);
@@ -75,7 +89,11 @@ fn main() {
                 }
             };
 
-            log::info!("Watching for messages on channel {}", channel_name);
+            log::info!(
+                "Watching for messages on channel {} in mailbox {}",
+                channel_name,
+                mailbox
+            );
 
             loop {
                 let result = session
@@ -86,15 +104,19 @@ fn main() {
                     log::error!("Error while idling: {:?}", result);
 
                     thread::sleep(std::time::Duration::from_secs(10));
-                    session = connect(&imap_store).unwrap();
+                    session = connect(&imap_store, &mailbox).unwrap();
 
                     continue;
                 }
 
-                log::info!("Syncing changes for {}", channel_name);
+                log::info!(
+                    "Syncing changes for {} in mailbox {}",
+                    channel_name,
+                    mailbox
+                );
 
                 Command::new("mbsync")
-                    .args(["--all", &format!("{}:INBOX", channel_name)])
+                    .args(["--all", &format!("{}:{}", channel_name, mailbox)])
                     .output()
                     .expect("Unable to sync mail");
             }
