@@ -65,21 +65,18 @@ impl Config {
         self.imap_stores
             .iter()
             .find(|store| format!(":{}:", store.name) == name)
-            .map(|store| store.clone())
+            .cloned()
     }
 
     pub fn find_channel(&self, name: &str) -> Option<ChannelConfig> {
         self.channels
             .iter()
             .find(|channel| channel.name == name)
-            .map(|channel| channel.clone())
+            .cloned()
     }
 
     pub fn find_group(&self, name: &str) -> Option<GroupConfig> {
-        self.groups
-            .iter()
-            .find(|group| group.name == name)
-            .map(|group| group.clone())
+        self.groups.iter().find(|group| group.name == name).cloned()
     }
 }
 
