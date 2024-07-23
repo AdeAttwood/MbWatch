@@ -109,16 +109,12 @@ fn main() {
                     continue;
                 }
 
-                log::info!(
-                    "Syncing changes for {} in mailbox {}",
-                    channel_name,
-                    mailbox
-                );
-
                 Command::new("mbsync")
                     .args(["--all", &format!("{}:{}", channel_name, mailbox)])
                     .output()
                     .expect("Unable to sync mail");
+
+                log::info!("Synced changes for {} in mailbox {}", channel_name, mailbox);
             }
         }));
     }
